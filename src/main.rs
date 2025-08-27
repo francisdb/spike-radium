@@ -4,6 +4,8 @@ use std::io::Read;
 use std::{path};
 use std::fs::File;
 
+use byteorder::{LittleEndian, ReadBytesExt};
+
 fn main() -> Result<()> {
     // Set default logging level to info
     // Initialize the logger with color support and debug level
@@ -109,17 +111,18 @@ fn parse_radium_file(file_path: &path::Path) -> Result<()> {
                 let video_section = VideoSection { description };
                 info!("Video section: {:?}", video_section);
                 let _ = read_header(&mut file)?;
-                // read 16 bytes we currently don't understand
-                let mut unknown_buffer = [0; 17];
+                // read 9 bytes we currently don't understand
+                let mut unknown_buffer = [0; 9];
                 file.read_exact(&mut unknown_buffer).expect("Failed to read file");
-                info!("Video section unknown 17 bytes: {:X?}", unknown_buffer);
+                info!("Video section unknown 9 bytes: {:X?}", unknown_buffer);
 
-                // loop and read videos until we hit an unknown block type
-                //info!("Video: name='{}', path='{}'", video.name, video.path);
+                let video_count = file.read_u64::<LittleEndian>().expect("Failed to read video count");
+                info!("Videos section count: {}", video_count);
 
-                loop {
+                for i in 0..video_count {
+                    // FIXME header reading is probably wrong inside read_video
                     let video = read_video(&mut file)?;
-                    info!("Video section video: {:?}", video);
+                    info!("Video section video {}: {:?}", i, video);
                 }
             },
             _ => {
@@ -130,25 +133,18 @@ fn parse_radium_file(file_path: &path::Path) -> Result<()> {
         }
     }
 
-
-
-    // read bytes
-    // parse bytes according to radium format
-    // print parsed data
     Ok(())
 }
 
 fn read_id(file: &mut File) -> Result<u16> {
-    let mut buffer = [0; 2];
-    file.read_exact(&mut buffer).expect("Failed to read file");
-    let id = u16::from_le_bytes(buffer);
+    let id = file.read_u16::<LittleEndian>().expect("Failed to read id");
     Ok(id)
 }
 
 fn read_header(file: &mut File) -> Result<[u8; 4]> {
     // before a string we always see 4 bytes
     let mut buffer = [0; 4];
-    file.read_exact(&mut buffer).expect("Failed to read file");
+    file.read_exact(&mut buffer).expect("Failed to read header");
     info!("Header 4 bytes: {:X?}", buffer);
     Ok(buffer)
 }
