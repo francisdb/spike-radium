@@ -33,3 +33,6 @@ See some of the following how you can configure your machine for remote-access:
 - https://github.com/JayFoxRox/stern-spike-dumper
 - https://github.com/JayFoxRox/spk-tools
 - https://github.com/bdash/spike-spk
+- https://archive.org/details/stern-pinball-sd-card-images
+- https://archive.org/details/stern-pinball-game-code
+- https://vpuniverse.com/forums/topic/5497-the-munsters-le-wip-vpx/page/3/

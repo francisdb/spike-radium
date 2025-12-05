@@ -21,13 +21,14 @@ fn main() -> Result<()> {
     // do a recursive search of *.radium files in ./lcd
     let radium_files = find_radium_files(path::Path::new("./lcd"))?;
 
-    // for now we filter out files where the path contains "5b2d86be0f5ed1a1e3d4a527fc8a0aa8113d285d"
     let radium_files = radium_files
         .into_iter()
         .filter(|p| {
             let s = p.to_str().unwrap_or("");
             //s.contains("5b2d86be0f5ed1a1e3d4a527fc8a0aa8113d285d")
-            s.contains("60ed7e5036b8ce09d35a3e101ea6fc1380b37d97")
+            //s.contains("60ed7e5036b8ce09d35a3e101ea6fc1380b37d97")
+            //s.contains("bc0792d8dc81e8aa30b987246a5ce97c40cd6833")
+            s.contains("1a35c3cd6345b3fab14834c05cbca44103c00fa7")
         })
         .collect::<Vec<_>>();
 
@@ -63,7 +64,7 @@ fn parse_radium_file(file_path: &path::Path) -> Result<()> {
         .expect("Failed to get file metadata")
         .len();
     // open the file
-    info!("Parsing file: {:?} ({})", file_path, file_size);
+    info!("=== Parsing file: {:?} ({})", file_path, file_size);
 
     let mut file = std::fs::File::open(file_path).expect("Failed to open file");
 
@@ -127,6 +128,45 @@ fn parse_radium_file(file_path: &path::Path) -> Result<()> {
                     let video = read_video(&mut file)?;
                     info!("Video section video {}: {:?}", i, video);
                 }
+
+                let mut unknown_buffer = [0; 68];
+                file.read_exact(&mut unknown_buffer)
+                    .expect("Failed to read file");
+                info!("Video section unknown {} bytes: {:X?}", unknown_buffer.len(),unknown_buffer);
+            }
+            "VideoSurface" => {
+                // some id?
+                read_unknown(&mut file, 4)?;
+                read_unknown(&mut file, 113)?;
+                let _ = read_id_header(&mut file)?;
+                // some id?
+                read_unknown(&mut file, 4)?;
+                let playlist = read_string(&mut file)?;
+                info!(" playlist: {}", playlist);
+                read_unknown(&mut file, 13)?;
+                let size = file.read_u64::<LittleEndian>().expect("Failed to read size");
+                info!("  size: {}", size);
+                for _ in 0..size {
+                    let video_name = read_string(&mut file)?;
+                    // 4 bytes id
+                    let id = file.read_u32::<LittleEndian>().expect("Failed to read id");
+                    info!("  video {id} {video_name}");
+                }
+                // 32 zeroes at the end
+                // we read only 20 so we break out of the loop cleanly
+                read_unknown(&mut file, 20)?;
+            }
+            "Font" => {
+                read_unknown(&mut file, 16)?;
+                let name = read_string(&mut file)?;
+                info!(" Font name: {}", name);
+                read_unknown(&mut file, 6)?;
+                // characters
+                for _ in 0..113 {
+                    let char_code = file.read_u16::<LittleEndian>().expect("Failed to read char code");
+                    info!("  char code: {:X?} {}", char_code, char_code as u8 as char);
+                }
+                //
             }
             _ => {
                 info!("Unknown section type: {}", section_type);
@@ -136,6 +176,14 @@ fn parse_radium_file(file_path: &path::Path) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn read_unknown(file: &mut File, size: usize) -> Result<()> {
+    let mut unknown_buffer = vec![0; size];
+    file.read_exact(&mut unknown_buffer)
+        .expect("Failed to read file");
+    info!("  unknown {size} bytes: {:X?}", unknown_buffer);
     Ok(())
 }
 
@@ -171,18 +219,15 @@ struct VideoSection {
 struct Video {
     name: String,
     path: String,
+    size: u32,
 }
 
 fn read_video(file: &mut File) -> Result<Video> {
     let name = read_string(file)?;
     let _ = read_id_header(file)?;
     let path = read_string(file)?;
-    // unknown 4 bytes
-    let mut unknown_buffer = [0; 4];
-    file.read_exact(&mut unknown_buffer)
-        .expect("Failed to read file");
-    info!("Video unknown 4 bytes: {:X?}", unknown_buffer);
-    Ok(Video { name, path })
+    let size = file.read_u32::<LittleEndian>().expect("Failed to read video size");
+    Ok(Video { name, path, size })
 }
 
 /// A string consists of a 8 bytes length prefix followed by the string data
